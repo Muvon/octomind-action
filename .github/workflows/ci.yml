@@ -40,6 +40,7 @@ jobs:
           - macos-15            # aarch64 macOS (M-series)
           - macos-15-intel      # x86_64 macOS (Intel)
           - windows-2025        # x86_64 Windows
+          - windows-11-arm      # aarch64 Windows
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
