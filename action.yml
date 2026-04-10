@@ -72,6 +72,11 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Update WSL
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: wsl.exe --update --no-distribution
+
     - name: Install octomind
       id: install
       shell: bash
