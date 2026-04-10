@@ -21,7 +21,6 @@ jobs:
 
       - name: Validate action.yml structure
         run: |
-          # Check key fields exist
           grep -q '^name:' action.yml || { echo "Missing name"; exit 1; }
           grep -q '^description:' action.yml || { echo "Missing description"; exit 1; }
           grep -q '^branding:' action.yml || { echo "Missing branding"; exit 1; }
@@ -30,17 +29,15 @@ jobs:
           echo "Action structure OK"
 
   test-install:
-    name: Test install step
+    name: Test install
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run action (dry run)
-        id: octomind
+      - name: Install via action
         uses: ./
         with:
-          prompt: "say test"
-          sandbox: 'true'
+          prompt: "say hi"
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         continue-on-error: true
