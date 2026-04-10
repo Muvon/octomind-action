@@ -72,11 +72,12 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Update WSL
+    - name: Setup WSL
       if: runner.os == 'Windows'
-      shell: pwsh
-      run: wsl.exe --update --no-distribution
-
+      uses: Vampire/setup-wsl@v6
+      with:
+        distribution: Ubuntu-24.04
+        update: 'true'
     - name: Install octomind
       id: install
       shell: bash
