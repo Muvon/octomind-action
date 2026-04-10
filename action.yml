@@ -107,61 +107,28 @@ runs:
       id: run
       shell: bash
       env:
-        OCTOMIND_CONFIG_PATH: ${{ inputs.config }}
         INPUT_PROMPT: ${{ inputs.prompt }}
       run: |
-        # Build command
-        CMD="octomind run"
-
-        # Role (positional arg)
-        if [ -n "${{ inputs.role }}" ]; then
-          CMD="$CMD ${{ inputs.role }}"
-        fi
-
-        # Always jsonl for structured output
-        CMD="$CMD --format jsonl"
-
-        # Optional flags
-        if [ -n "${{ inputs.model }}" ]; then
-          CMD="$CMD --model ${{ inputs.model }}"
-        fi
-
-        if [ -n "${{ inputs.name }}" ]; then
-          CMD="$CMD --name ${{ inputs.name }}"
-        fi
-
-        if [ -n "${{ inputs.resume }}" ]; then
-          CMD="$CMD --resume ${{ inputs.resume }}"
-        fi
-
-        if [ "${{ inputs.resume_recent }}" = "true" ]; then
-          CMD="$CMD --resume-recent"
-        fi
-
-        if [ "${{ inputs.sandbox }}" = "true" ]; then
-          CMD="$CMD --sandbox"
-        fi
-
-        # Hook: split comma-separated into multiple --hook flags
-        if [ -n "${{ inputs.hook }}" ]; then
-          IFS=',' read -ra HOOKS <<< "${{ inputs.hook }}"
-          for h in "${HOOKS[@]}"; do
-            CMD="$CMD --hook $(echo "$h" | xargs)"
-          done
-        fi
-
-        # Unset config path if empty (don't override with blank)
-        if [ -z "$OCTOMIND_CONFIG_PATH" ]; then
-          unset OCTOMIND_CONFIG_PATH
-        fi
-
         OUTPUT_FILE="${RUNNER_TEMP}/octomind-output.jsonl"
 
-        # Run and capture exit code
+        ARGS="--format jsonl"
+        [ -n "${{ inputs.role }}" ] && ARGS="${{ inputs.role }} $ARGS"
+        [ -n "${{ inputs.model }}" ] && ARGS="$ARGS --model ${{ inputs.model }}"
+        [ -n "${{ inputs.name }}" ] && ARGS="$ARGS --name ${{ inputs.name }}"
+        [ -n "${{ inputs.resume }}" ] && ARGS="$ARGS --resume ${{ inputs.resume }}"
+        [ "${{ inputs.resume_recent }}" = "true" ] && ARGS="$ARGS --resume-recent"
+        [ "${{ inputs.sandbox }}" = "true" ] && ARGS="$ARGS --sandbox"
+        [ -n "${{ inputs.config }}" ] && export OCTOMIND_CONFIG_PATH="${{ inputs.config }}"
+
         set +e
-        echo "$INPUT_PROMPT" | $CMD > "$OUTPUT_FILE" 2>&1
+        echo "${INPUT_PROMPT}" | octomind run $ARGS > "$OUTPUT_FILE" 2>&1
         EXIT_CODE=$?
         set -e
+
+        if [ $EXIT_CODE -ne 0 ]; then
+          echo "::error::octomind exited with code $EXIT_CODE"
+          cat "$OUTPUT_FILE"
+        fi
 
         echo "exit_code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
         echo "output_file=${OUTPUT_FILE}" >> "$GITHUB_OUTPUT"
