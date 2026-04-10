@@ -29,8 +29,18 @@ jobs:
           echo "Action structure OK"
 
   test-run:
-    name: Test run
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.os }})
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04        # x86_64 Linux
+          - ubuntu-24.04-arm    # aarch64 Linux
+          - macos-15            # aarch64 macOS (M-series)
+          - macos-15-intel      # x86_64 macOS (Intel)
+          - windows-2025        # x86_64 Windows
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -45,6 +55,7 @@ jobs:
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
 
       - name: Verify outputs
+        shell: bash
         run: |
           echo "Exit code: ${{ steps.octomind.outputs.exit_code }}"
           echo "Result: ${{ steps.octomind.outputs.result }}"
