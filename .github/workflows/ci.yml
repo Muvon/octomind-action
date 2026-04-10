@@ -28,19 +28,26 @@ jobs:
           grep -q "using: 'composite'" action.yml || { echo "Not a composite action"; exit 1; }
           echo "Action structure OK"
 
-  test-install:
-    name: Test install
+  test-run:
+    name: Test run
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install via action
+      - name: Run action
+        id: octomind
         uses: ./
         with:
           prompt: "say hi"
+          role: assistant:general
+          model: ollama:minimax-m2.7
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-        continue-on-error: true
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
 
-      - name: Verify binary installed
-        run: which octomind && octomind --version
+      - name: Verify outputs
+        run: |
+          echo "Exit code: ${{ steps.octomind.outputs.exit_code }}"
+          echo "Result: ${{ steps.octomind.outputs.result }}"
+          echo "Session: ${{ steps.octomind.outputs.session_id }}"
+          echo "Cost: ${{ steps.octomind.outputs.cost }}"
+          test "${{ steps.octomind.outputs.exit_code }}" = "0"
