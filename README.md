@@ -25,8 +25,7 @@ Run [Octomind](https://github.com/Muvon/octomind) AI agent in your GitHub Action
 | `sandbox` | no | `true` | Restrict filesystem writes to the current working directory |
 | `hook` | no | — | Comma-separated webhook hook names to activate |
 | `version` | no | `latest` | Octomind version to install |
-| `tap` | no | — | Tap to add before run (`user/repo` format) |
-| `tap_path` | no | — | Local path for tap (local directory instead of GitHub clone) |
+| `tap` | no | — | Tap to add before run (e.g. `user/repo` or `user/repo ./local/path`) |
 | `config` | no | — | Path to octomind config file |
 | `comment` | no | `none` | PR comment mode: `full`, `compact` (collapsible), `none` |
 | `github_token` | no | `${{ github.token }}` | GitHub token for PR commenting |

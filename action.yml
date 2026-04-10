@@ -29,7 +29,7 @@ inputs:
   sandbox:
     description: 'Restrict filesystem writes to the current working directory'
     required: false
-    default: 'true'
+    default: 'false'
   hook:
     description: 'Comma-separated webhook hook names to activate'
     required: false
@@ -38,10 +38,7 @@ inputs:
     required: false
     default: 'latest'
   tap:
-    description: 'Tap to add before run (user/repo format)'
-    required: false
-  tap_path:
-    description: 'Local path for tap (uses local directory instead of GitHub clone)'
+    description: 'Tap to add before run (e.g. "user/repo" or "user/repo ./local/path")'
     required: false
   config:
     description: 'Path to octomind config file'
@@ -102,14 +99,7 @@ runs:
     - name: Add tap
       if: inputs.tap != ''
       shell: bash
-      run: |
-        TAP="${{ inputs.tap }}"
-        TAP_PATH="${{ inputs.tap_path }}"
-        if [ -n "$TAP_PATH" ]; then
-          octomind tap "$TAP" "$TAP_PATH"
-        else
-          octomind tap "$TAP"
-        fi
+      run: octomind tap ${{ inputs.tap }}
 
     - name: Run octomind
       id: run
