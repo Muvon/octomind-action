@@ -184,14 +184,18 @@ runs:
         MODE="${{ inputs.comment }}"
 
         # Build header line
-        HEADER="Octomind"
+        REPO="${GITHUB_REPOSITORY:-}"
+        BRANCH="${GITHUB_REF_NAME:-}"
+        UTM="?utm_source=github"
+        [ -n "$REPO" ] && UTM="${UTM}&utm_medium=$REPO"
+        [ -n "$BRANCH" ] && UTM="${UTM}&utm_content=$BRANCH"
+        HEADER="[Octomind](https://octomind.run${UTM})"
         if [ -n "$ROLE" ]; then
           HEADER="$HEADER — $ROLE"
         fi
         if [ -n "$MODEL" ]; then
           HEADER="$HEADER ($MODEL)"
         fi
-
         if [ "$MODE" = "compact" ]; then
           BODY="<details>
         <summary><strong>${HEADER}</strong></summary>
