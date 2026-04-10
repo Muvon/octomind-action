@@ -72,12 +72,6 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Setup WSL
-      if: runner.os == 'Windows'
-      uses: Vampire/setup-wsl@v6
-      with:
-        distribution: Ubuntu-24.04
-        update: 'true'
     - name: Install octomind
       id: install
       shell: bash
@@ -99,7 +93,7 @@ runs:
             VERSION_FLAG="--version ${VERSION}"
           fi
           curl -fsSL https://raw.githubusercontent.com/Muvon/octomind/master/install.sh \
-            | sh -s -- ${VERSION_FLAG} --install-dir "${INSTALL_DIR}"
+            | bash -s -- ${VERSION_FLAG} --install-dir "${INSTALL_DIR}"
         fi
 
         echo "${INSTALL_DIR}" >> "$GITHUB_PATH"
