@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  validate:
+    name: Validate action
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required files
+        run: |
+          test -f action.yml || { echo "Missing action.yml"; exit 1; }
+          test -f README.md || { echo "Missing README.md"; exit 1; }
+          test -f LICENSE || { echo "Missing LICENSE"; exit 1; }
+          echo "All required files present"
+
+      - name: Validate action.yml structure
+        run: |
+          # Check key fields exist
+          grep -q '^name:' action.yml || { echo "Missing name"; exit 1; }
+          grep -q '^description:' action.yml || { echo "Missing description"; exit 1; }
+          grep -q '^branding:' action.yml || { echo "Missing branding"; exit 1; }
+          grep -q '  prompt:' action.yml || { echo "Missing prompt input"; exit 1; }
+          grep -q "using: 'composite'" action.yml || { echo "Not a composite action"; exit 1; }
+          echo "Action structure OK"
+
+  test-install:
+    name: Test install step
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run action (dry run)
+        id: octomind
+        uses: ./
+        with:
+          prompt: "say test"
+          sandbox: 'true'
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        continue-on-error: true
+
+      - name: Verify binary installed
+        run: which octomind && octomind --version

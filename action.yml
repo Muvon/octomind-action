@@ -1,0 +1,255 @@
+name: 'Octomind Action'
+description: 'Run Octomind AI agent in your GitHub Actions workflows'
+author: 'Muvon Un Limited'
+
+branding:
+  icon: 'cpu'
+  color: 'purple'
+
+inputs:
+  prompt:
+    description: 'Task or message to send to octomind'
+    required: true
+  role:
+    description: 'Role to use (e.g. developer:rust). Defaults to config default'
+    required: false
+  model:
+    description: 'Model override (e.g. openrouter:anthropic/claude-sonnet-4)'
+    required: false
+  name:
+    description: 'Session name — creates or resumes a named session'
+    required: false
+  resume:
+    description: 'Resume a specific session by name'
+    required: false
+  resume_recent:
+    description: 'Resume the most recent session for the current directory'
+    required: false
+    default: 'false'
+  sandbox:
+    description: 'Restrict filesystem writes to the current working directory'
+    required: false
+    default: 'true'
+  hook:
+    description: 'Comma-separated webhook hook names to activate'
+    required: false
+  version:
+    description: 'Octomind version to install (default: latest)'
+    required: false
+    default: 'latest'
+  tap:
+    description: 'Tap to add before run (user/repo format)'
+    required: false
+  tap_path:
+    description: 'Local path for tap (uses local directory instead of GitHub clone)'
+    required: false
+  config:
+    description: 'Path to octomind config file'
+    required: false
+  comment:
+    description: 'PR comment mode: full (direct post), compact (collapsible), none (no comment)'
+    required: false
+    default: 'none'
+  github_token:
+    description: 'GitHub token for PR commenting'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  result:
+    description: 'Last assistant message content'
+    value: ${{ steps.parse.outputs.result }}
+  session_id:
+    description: 'Session ID for resuming in subsequent steps'
+    value: ${{ steps.parse.outputs.session_id }}
+  cost:
+    description: 'Session cost as JSON (tokens, cost)'
+    value: ${{ steps.parse.outputs.cost }}
+  raw_output:
+    description: 'Full JSONL output for advanced parsing'
+    value: ${{ steps.parse.outputs.raw_output }}
+  exit_code:
+    description: 'Process exit code'
+    value: ${{ steps.run.outputs.exit_code }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install octomind
+      id: install
+      shell: bash
+      run: |
+        VERSION="${{ inputs.version }}"
+        if [ "$VERSION" = "latest" ]; then
+          INSTALL_DIR="${RUNNER_TOOL_CACHE}/octomind/latest"
+        else
+          INSTALL_DIR="${RUNNER_TOOL_CACHE}/octomind/${VERSION}"
+        fi
+
+        if [ -x "${INSTALL_DIR}/octomind" ]; then
+          echo "Octomind already installed at ${INSTALL_DIR}"
+        else
+          VERSION_FLAG=""
+          if [ "$VERSION" != "latest" ]; then
+            VERSION_FLAG="--version ${VERSION}"
+          fi
+          curl -fsSL https://raw.githubusercontent.com/Muvon/octomind/master/install.sh \
+            | sh -s -- ${VERSION_FLAG} --install-dir "${INSTALL_DIR}"
+        fi
+
+        echo "${INSTALL_DIR}" >> "$GITHUB_PATH"
+
+    - name: Add tap
+      if: inputs.tap != ''
+      shell: bash
+      run: |
+        TAP="${{ inputs.tap }}"
+        TAP_PATH="${{ inputs.tap_path }}"
+        if [ -n "$TAP_PATH" ]; then
+          octomind tap "$TAP" "$TAP_PATH"
+        else
+          octomind tap "$TAP"
+        fi
+
+    - name: Run octomind
+      id: run
+      shell: bash
+      env:
+        OCTOMIND_CONFIG_PATH: ${{ inputs.config }}
+        INPUT_PROMPT: ${{ inputs.prompt }}
+      run: |
+        # Build command
+        CMD="octomind run"
+
+        # Role (positional arg)
+        if [ -n "${{ inputs.role }}" ]; then
+          CMD="$CMD ${{ inputs.role }}"
+        fi
+
+        # Always jsonl for structured output
+        CMD="$CMD --format jsonl"
+
+        # Optional flags
+        if [ -n "${{ inputs.model }}" ]; then
+          CMD="$CMD --model ${{ inputs.model }}"
+        fi
+
+        if [ -n "${{ inputs.name }}" ]; then
+          CMD="$CMD --name ${{ inputs.name }}"
+        fi
+
+        if [ -n "${{ inputs.resume }}" ]; then
+          CMD="$CMD --resume ${{ inputs.resume }}"
+        fi
+
+        if [ "${{ inputs.resume_recent }}" = "true" ]; then
+          CMD="$CMD --resume-recent"
+        fi
+
+        if [ "${{ inputs.sandbox }}" = "true" ]; then
+          CMD="$CMD --sandbox"
+        fi
+
+        # Hook: split comma-separated into multiple --hook flags
+        if [ -n "${{ inputs.hook }}" ]; then
+          IFS=',' read -ra HOOKS <<< "${{ inputs.hook }}"
+          for h in "${HOOKS[@]}"; do
+            CMD="$CMD --hook $(echo "$h" | xargs)"
+          done
+        fi
+
+        # Unset config path if empty (don't override with blank)
+        if [ -z "$OCTOMIND_CONFIG_PATH" ]; then
+          unset OCTOMIND_CONFIG_PATH
+        fi
+
+        OUTPUT_FILE="${RUNNER_TEMP}/octomind-output.jsonl"
+
+        # Run and capture exit code
+        set +e
+        echo "$INPUT_PROMPT" | $CMD > "$OUTPUT_FILE" 2>&1
+        EXIT_CODE=$?
+        set -e
+
+        echo "exit_code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
+        echo "output_file=${OUTPUT_FILE}" >> "$GITHUB_OUTPUT"
+
+    - name: Parse outputs
+      id: parse
+      shell: bash
+      run: |
+        OUTPUT_FILE="${{ steps.run.outputs.output_file }}"
+
+        if [ ! -f "$OUTPUT_FILE" ]; then
+          echo "result=" >> "$GITHUB_OUTPUT"
+          echo "session_id=" >> "$GITHUB_OUTPUT"
+          echo "cost=" >> "$GITHUB_OUTPUT"
+          echo "raw_output=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # Extract last assistant message
+        RESULT=$(grep '"type":"assistant"' "$OUTPUT_FILE" | tail -1 | jq -r '.content // empty' 2>/dev/null || true)
+
+        # Extract session ID
+        SESSION_ID=$(grep '"session_id"' "$OUTPUT_FILE" | head -1 | jq -r '.session_id // empty' 2>/dev/null || true)
+
+        # Extract cost
+        COST=$(grep '"type":"cost"' "$OUTPUT_FILE" | tail -1 | jq -c '{tokens: .session_tokens, cost: .session_cost}' 2>/dev/null || echo '{}')
+
+        # Set outputs using delimiter for multiline
+        EOF_MARKER="EOF_$(date +%s%N)"
+
+        echo "result<<${EOF_MARKER}" >> "$GITHUB_OUTPUT"
+        echo "$RESULT" >> "$GITHUB_OUTPUT"
+        echo "${EOF_MARKER}" >> "$GITHUB_OUTPUT"
+
+        echo "session_id=${SESSION_ID}" >> "$GITHUB_OUTPUT"
+        echo "cost=${COST}" >> "$GITHUB_OUTPUT"
+
+        echo "raw_output<<${EOF_MARKER}_RAW" >> "$GITHUB_OUTPUT"
+        cat "$OUTPUT_FILE" >> "$GITHUB_OUTPUT"
+        echo "${EOF_MARKER}_RAW" >> "$GITHUB_OUTPUT"
+
+    - name: Post PR comment
+      if: inputs.comment != 'none' && github.event.pull_request.number != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        COMMENT_RESULT: ${{ steps.parse.outputs.result }}
+      run: |
+        PR_NUMBER="${{ github.event.pull_request.number }}"
+        COST="${{ steps.parse.outputs.cost }}"
+        ROLE="${{ inputs.role }}"
+        MODEL="${{ inputs.model }}"
+        MODE="${{ inputs.comment }}"
+
+        # Build header line
+        HEADER="Octomind"
+        if [ -n "$ROLE" ]; then
+          HEADER="$HEADER — $ROLE"
+        fi
+        if [ -n "$MODEL" ]; then
+          HEADER="$HEADER ($MODEL)"
+        fi
+
+        if [ "$MODE" = "compact" ]; then
+          BODY="<details>
+        <summary><strong>${HEADER}</strong></summary>
+
+        ${COMMENT_RESULT}
+
+        ---
+        <sub>${COST}</sub>
+        </details>"
+        else
+          # full mode
+          BODY="### ${HEADER}
+
+        ${COMMENT_RESULT}
+
+        ---
+        <sub>${COST}</sub>"
+        fi
+
+        gh pr comment "$PR_NUMBER" --body "$BODY"
