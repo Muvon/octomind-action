@@ -138,6 +138,8 @@ runs:
 
         echo "exit_code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
         echo "output_file=${OUTPUT_FILE}" >> "$GITHUB_OUTPUT"
+        # Defer failure so comment step can still run, then we fail below
+        echo "failed=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
 
     - name: Parse outputs
       id: parse
@@ -177,7 +179,7 @@ runs:
         echo "${EOF_MARKER}_RAW" >> "$GITHUB_OUTPUT"
 
     - name: Post PR comment
-      if: inputs.comment != 'none' && github.event.pull_request.number != ''
+      if: always() && inputs.comment != 'none' && github.event.pull_request.number != ''
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github_token }}
@@ -222,3 +224,10 @@ runs:
         fi
 
         gh pr comment "$PR_NUMBER" --body "$BODY"
+
+    - name: Fail on octomind error
+      if: steps.run.outputs.failed != '0'
+      shell: bash
+      run: |
+        echo "::error::octomind exited with code ${{ steps.run.outputs.failed }}"
+        exit ${{ steps.run.outputs.failed }}
