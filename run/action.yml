@@ -30,9 +30,6 @@ inputs:
     description: 'Restrict filesystem writes to the current working directory'
     required: false
     default: 'false'
-  hook:
-    description: 'Comma-separated webhook hook names to activate'
-    required: false
   version:
     description: 'Octomind version to install (default: latest)'
     required: false
@@ -83,7 +80,6 @@ runs:
         resume: ${{ inputs.resume }}
         resume_recent: ${{ inputs.resume_recent }}
         sandbox: ${{ inputs.sandbox }}
-        hook: ${{ inputs.hook }}
         version: ${{ inputs.version }}
         tap: ${{ inputs.tap }}
         config: ${{ inputs.config }}

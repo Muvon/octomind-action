@@ -54,9 +54,6 @@ inputs:
     description: 'Restrict filesystem writes to the current working directory'
     required: false
     default: 'false'
-  hook:
-    description: 'Comma-separated webhook hook names to activate'
-    required: false
   # --- workflow only ---
   workflow_file:
     description: 'Path to the workflow TOML file'
