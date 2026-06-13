@@ -1,0 +1,67 @@
+name: 'Octomind Workflow'
+description: 'Run a multi-step Octomind workflow (TOML) in your GitHub Actions workflows'
+author: 'Muvon Un Limited'
+
+branding:
+  icon: 'cpu'
+  color: 'purple'
+
+inputs:
+  workflow_file:
+    description: 'Path to the workflow TOML file'
+    required: true
+  input:
+    description: 'Input passed to the workflow via stdin'
+    required: true
+  dry_run:
+    description: 'Validate and print the execution plan without running any steps'
+    required: false
+    default: 'false'
+  version:
+    description: 'Octomind version to install (default: latest)'
+    required: false
+    default: 'latest'
+  tap:
+    description: 'Tap to add before run (e.g. "user/repo" or "user/repo ./local/path")'
+    required: false
+  config:
+    description: 'Path to octomind config file'
+    required: false
+  comment:
+    description: 'PR comment mode: full (direct post), compact (collapsible), none (no comment)'
+    required: false
+    default: 'none'
+  github_token:
+    description: 'GitHub token for PR commenting'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  result:
+    description: 'Final workflow result (last step output)'
+    value: ${{ steps.core.outputs.result }}
+  cost:
+    description: 'Aggregated workflow cost as JSON (tokens, cost)'
+    value: ${{ steps.core.outputs.cost }}
+  raw_output:
+    description: 'Full JSONL output for advanced parsing'
+    value: ${{ steps.core.outputs.raw_output }}
+  exit_code:
+    description: 'Process exit code'
+    value: ${{ steps.core.outputs.exit_code }}
+
+runs:
+  using: 'composite'
+  steps:
+    - id: core
+      uses: muvon/octomind-action/_core@v1
+      with:
+        command: workflow
+        workflow_file: ${{ inputs.workflow_file }}
+        prompt: ${{ inputs.input }}
+        dry_run: ${{ inputs.dry_run }}
+        version: ${{ inputs.version }}
+        tap: ${{ inputs.tap }}
+        config: ${{ inputs.config }}
+        comment: ${{ inputs.comment }}
+        github_token: ${{ inputs.github_token }}
