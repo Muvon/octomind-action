@@ -57,7 +57,6 @@ This repo ships two actions:
 | `resume` | no | — | Resume a specific session by name |
 | `resume_recent` | no | `false` | Resume the most recent session for the current directory |
 | `sandbox` | no | `false` | Restrict filesystem writes to the current working directory |
-| `hook` | no | — | Comma-separated webhook hook names to activate |
 | `version` | no | `latest` | Octomind version to install |
 | `tap` | no | — | Tap to add before run (e.g. `user/repo` or `user/repo ./local/path`) |
 | `config` | no | — | Path to octomind config file |
@@ -95,10 +94,11 @@ This repo ships two actions:
 |--------|-------------|
 | `result` | Final workflow result (last step output) |
 | `cost` | Aggregated cost as JSON (`{"tokens": N, "cost": N}`) |
-| `raw_output` | Full JSONL output for advanced parsing |
+| `raw_output` | Full JSONL — one `assistant` event per step (with a `step` name) + a final `cost` event |
 | `exit_code` | Process exit code |
 
 > Workflows have no single resumable session, so there is no `session_id` output.
+> `raw_output` streams each step's outcome as `{"type":"assistant","content":...,"step":"<name>"}`, so `result` (the last one) is the final result.
 
 ## API Keys
 
