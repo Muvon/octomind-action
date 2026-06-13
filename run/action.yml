@@ -1,11 +1,6 @@
-name: 'Octomind Action'
-description: 'Run Octomind AI agent in your GitHub Actions workflows'
+name: 'Octomind Run'
+description: 'Run an Octomind AI agent in your GitHub Actions workflows'
 author: 'Muvon Un Limited'
-
-# This root action is the Marketplace listing and the bare-reference entry
-# point (muvon/octomind-action@v1). It is an alias for the `run` command —
-# identical to muvon/octomind-action/run@v1. For multi-step TOML workflows,
-# use muvon/octomind-action/workflow@v1.
 
 branding:
   icon: 'cpu'

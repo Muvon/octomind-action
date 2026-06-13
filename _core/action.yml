@@ -1,0 +1,254 @@
+name: 'Octomind Core'
+description: 'Internal engine shared by octomind run/workflow actions — do not use directly'
+author: 'Muvon Un Limited'
+
+# INTERNAL ACTION. Public entry points are the root action (= run),
+# muvon/octomind-action/run, and muvon/octomind-action/workflow. This action
+# holds the shared install/invoke/parse/comment/fail logic so the public
+# facades stay thin. Its inputs are the union of both commands.
+
+inputs:
+  command:
+    description: 'octomind subcommand to run: run | workflow'
+    required: true
+  # --- shared ---
+  prompt:
+    description: 'run: task/message. workflow: input — both piped to octomind via stdin'
+    required: false
+  version:
+    description: 'Octomind version to install (default: latest)'
+    required: false
+    default: 'latest'
+  tap:
+    description: 'Tap to add before run (e.g. "user/repo" or "user/repo ./local/path")'
+    required: false
+  config:
+    description: 'Path to octomind config file'
+    required: false
+  comment:
+    description: 'PR comment mode: full (direct post), compact (collapsible), none (no comment)'
+    required: false
+    default: 'none'
+  github_token:
+    description: 'GitHub token for PR commenting'
+    required: false
+    default: ${{ github.token }}
+  # --- run only ---
+  role:
+    description: 'Role to use (e.g. developer:rust). Defaults to config default'
+    required: false
+  model:
+    description: 'Model override (e.g. openrouter:anthropic/claude-sonnet-4)'
+    required: false
+  name:
+    description: 'Session name — creates or resumes a named session'
+    required: false
+  resume:
+    description: 'Resume a specific session by name'
+    required: false
+  resume_recent:
+    description: 'Resume the most recent session for the current directory'
+    required: false
+    default: 'false'
+  sandbox:
+    description: 'Restrict filesystem writes to the current working directory'
+    required: false
+    default: 'false'
+  hook:
+    description: 'Comma-separated webhook hook names to activate'
+    required: false
+  # --- workflow only ---
+  workflow_file:
+    description: 'Path to the workflow TOML file'
+    required: false
+  dry_run:
+    description: 'Validate and print the execution plan without running any steps'
+    required: false
+    default: 'false'
+
+outputs:
+  result:
+    description: 'Last assistant message content (workflow: final result)'
+    value: ${{ steps.parse.outputs.result }}
+  session_id:
+    description: 'Session ID for resuming in subsequent steps (empty for workflow)'
+    value: ${{ steps.parse.outputs.session_id }}
+  cost:
+    description: 'Session cost as JSON (tokens, cost)'
+    value: ${{ steps.parse.outputs.cost }}
+  raw_output:
+    description: 'Full JSONL output for advanced parsing'
+    value: ${{ steps.parse.outputs.raw_output }}
+  exit_code:
+    description: 'Process exit code'
+    value: ${{ steps.run.outputs.exit_code }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Fix Windows shell resolution
+      if: runner.os == 'Windows'
+      shell: bash
+      run: |
+        # Prepend Git Bash to PATH so 'sh' resolves to Git Bash instead of the WSL stub in System32
+        echo "C:\Program Files\Git\usr\bin" >> "$GITHUB_PATH"
+
+    - name: Install octomind
+      id: install
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: |
+        VERSION="${{ inputs.version }}"
+        if [ "$VERSION" = "latest" ]; then
+          INSTALL_DIR="${RUNNER_TOOL_CACHE}/octomind/latest"
+        else
+          INSTALL_DIR="${RUNNER_TOOL_CACHE}/octomind/${VERSION}"
+        fi
+
+        if [ -x "${INSTALL_DIR}/octomind" ]; then
+          echo "Octomind already installed at ${INSTALL_DIR}"
+        else
+          VERSION_FLAG=""
+          if [ "$VERSION" != "latest" ]; then
+            VERSION_FLAG="--version ${VERSION}"
+          fi
+          curl -fsSL https://raw.githubusercontent.com/Muvon/octomind/master/install.sh \
+            | bash -s -- ${VERSION_FLAG} --install-dir "${INSTALL_DIR}"
+        fi
+
+        echo "${INSTALL_DIR}" >> "$GITHUB_PATH"
+
+    - name: Add tap
+      if: inputs.tap != ''
+      shell: bash
+      run: octomind tap ${{ inputs.tap }}
+
+    - name: Run octomind
+      id: run
+      shell: bash
+      env:
+        INPUT_PROMPT: ${{ inputs.prompt }}
+      run: |
+        OUTPUT_FILE="${RUNNER_TEMP}/octomind-output.jsonl"
+
+        [ -n "${{ inputs.config }}" ] && export OCTOMIND_CONFIG_PATH="${{ inputs.config }}"
+
+        set +e
+        if [ "${{ inputs.command }}" = "workflow" ]; then
+          ARGS="--format jsonl"
+          [ "${{ inputs.dry_run }}" = "true" ] && ARGS="$ARGS --dry-run"
+          echo "${INPUT_PROMPT}" | octomind workflow "${{ inputs.workflow_file }}" $ARGS > "$OUTPUT_FILE" 2>&1
+        else
+          ARGS="--format jsonl"
+          [ -n "${{ inputs.role }}" ] && ARGS="${{ inputs.role }} $ARGS"
+          [ -n "${{ inputs.model }}" ] && ARGS="$ARGS --model ${{ inputs.model }}"
+          [ -n "${{ inputs.name }}" ] && ARGS="$ARGS --name ${{ inputs.name }}"
+          [ -n "${{ inputs.resume }}" ] && ARGS="$ARGS --resume ${{ inputs.resume }}"
+          [ "${{ inputs.resume_recent }}" = "true" ] && ARGS="$ARGS --resume-recent"
+          [ "${{ inputs.sandbox }}" = "true" ] && ARGS="$ARGS --sandbox"
+          echo "${INPUT_PROMPT}" | octomind run $ARGS > "$OUTPUT_FILE" 2>&1
+        fi
+        EXIT_CODE=$?
+        set -e
+
+        if [ $EXIT_CODE -ne 0 ]; then
+          echo "::error::octomind exited with code $EXIT_CODE"
+          cat "$OUTPUT_FILE"
+        fi
+
+        echo "exit_code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
+        echo "output_file=${OUTPUT_FILE}" >> "$GITHUB_OUTPUT"
+        # Defer failure so comment step can still run, then we fail below
+        echo "failed=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
+
+    - name: Parse outputs
+      id: parse
+      shell: bash
+      run: |
+        OUTPUT_FILE="${{ steps.run.outputs.output_file }}"
+
+        if [ ! -f "$OUTPUT_FILE" ]; then
+          echo "result=" >> "$GITHUB_OUTPUT"
+          echo "session_id=" >> "$GITHUB_OUTPUT"
+          echo "cost=" >> "$GITHUB_OUTPUT"
+          echo "raw_output=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # Extract last assistant message
+        RESULT=$(grep '"type":"assistant"' "$OUTPUT_FILE" | tail -1 | jq -r '.content // empty' 2>/dev/null || true)
+
+        # Extract session ID
+        SESSION_ID=$(grep '"session_id"' "$OUTPUT_FILE" | head -1 | jq -r '.session_id // empty' 2>/dev/null || true)
+
+        # Extract cost
+        COST=$(grep '"type":"cost"' "$OUTPUT_FILE" | tail -1 | jq -c '{tokens: .session_tokens, cost: .session_cost}' 2>/dev/null || echo '{}')
+
+        # Set outputs using delimiter for multiline
+        EOF_MARKER="EOF_$(date +%s%N)"
+
+        echo "result<<${EOF_MARKER}" >> "$GITHUB_OUTPUT"
+        echo "$RESULT" >> "$GITHUB_OUTPUT"
+        echo "${EOF_MARKER}" >> "$GITHUB_OUTPUT"
+
+        echo "session_id=${SESSION_ID}" >> "$GITHUB_OUTPUT"
+        echo "cost=${COST}" >> "$GITHUB_OUTPUT"
+
+        echo "raw_output<<${EOF_MARKER}_RAW" >> "$GITHUB_OUTPUT"
+        cat "$OUTPUT_FILE" >> "$GITHUB_OUTPUT"
+        echo "${EOF_MARKER}_RAW" >> "$GITHUB_OUTPUT"
+
+    - name: Post PR comment
+      if: always() && inputs.comment != 'none' && github.event.pull_request.number != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        COMMENT_RESULT: ${{ steps.parse.outputs.result }}
+      run: |
+        PR_NUMBER="${{ github.event.pull_request.number }}"
+        COST="${{ steps.parse.outputs.cost }}"
+        LABEL="${{ inputs.role }}${{ inputs.workflow_file }}"
+        MODEL="${{ inputs.model }}"
+        MODE="${{ inputs.comment }}"
+
+        # Build header line
+        REPO="${GITHUB_REPOSITORY:-}"
+        BRANCH="${GITHUB_REF_NAME:-}"
+        UTM="?utm_source=github"
+        [ -n "$REPO" ] && UTM="${UTM}&utm_medium=$REPO"
+        [ -n "$BRANCH" ] && UTM="${UTM}&utm_content=$BRANCH"
+        HEADER="[Octomind](https://octomind.run${UTM})"
+        if [ -n "$LABEL" ]; then
+          HEADER="$HEADER — $LABEL"
+        fi
+        if [ -n "$MODEL" ]; then
+          HEADER="$HEADER ($MODEL)"
+        fi
+        if [ "$MODE" = "compact" ]; then
+          BODY="<details>
+        <summary><strong>${HEADER}</strong></summary>
+
+        ${COMMENT_RESULT}
+
+        ---
+        <sub>${COST}</sub>
+        </details>"
+        else
+          # full mode
+          BODY="### ${HEADER}
+
+        ${COMMENT_RESULT}
+
+        ---
+        <sub>${COST}</sub>"
+        fi
+
+        gh pr comment "$PR_NUMBER" --body "$BODY"
+
+    - name: Fail on octomind error
+      if: steps.run.outputs.failed != '0'
+      shell: bash
+      run: |
+        echo "::error::octomind exited with code ${{ steps.run.outputs.failed }}"
+        exit ${{ steps.run.outputs.failed }}
