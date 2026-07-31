@@ -61,9 +61,9 @@ jobs:
           command: run
           prompt: "say hi"
           role: assistant:general
-          model: ollama:minimax-m2.7
+          model: octohub:deepseek-v4-flash
         env:
-          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          OCTOHUB_API_KEY: ${{ secrets.OCTOHUB_API_KEY }}
 
       - name: Verify outputs
         shell: bash
@@ -90,7 +90,7 @@ jobs:
           [[steps]]
           name   = "greet"
           role   = "assistant:general"
-          model  = "ollama:minimax-m2.7"
+          model  = "octohub:deepseek-v4-flash"
           prompt = "Reply with a short greeting to: {{input}}"
           TOML
 
@@ -102,7 +102,7 @@ jobs:
           workflow_file: /tmp/ci-workflow.toml
           prompt: "the CI pipeline"
         env:
-          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          OCTOHUB_API_KEY: ${{ secrets.OCTOHUB_API_KEY }}
 
       - name: Verify outputs
         shell: bash
