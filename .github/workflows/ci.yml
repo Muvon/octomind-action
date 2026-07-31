@@ -7,29 +7,37 @@ on:
 
 jobs:
   validate:
-    name: Validate action
+    name: Validate actions
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Check required files
         run: |
-          test -f action.yml || { echo "Missing action.yml"; exit 1; }
-          test -f README.md || { echo "Missing README.md"; exit 1; }
-          test -f LICENSE || { echo "Missing LICENSE"; exit 1; }
+          for f in action.yml run/action.yml workflow/action.yml _core/action.yml README.md LICENSE; do
+            test -f "$f" || { echo "Missing $f"; exit 1; }
+          done
           echo "All required files present"
 
-      - name: Validate action.yml structure
+      - name: Validate action metadata
         run: |
-          grep -q '^name:' action.yml || { echo "Missing name"; exit 1; }
-          grep -q '^description:' action.yml || { echo "Missing description"; exit 1; }
-          grep -q '^branding:' action.yml || { echo "Missing branding"; exit 1; }
-          grep -q '  prompt:' action.yml || { echo "Missing prompt input"; exit 1; }
-          grep -q "using: 'composite'" action.yml || { echo "Not a composite action"; exit 1; }
-          echo "Action structure OK"
+          for f in action.yml run/action.yml workflow/action.yml _core/action.yml; do
+            grep -q '^name:' "$f" || { echo "$f: missing name"; exit 1; }
+            grep -q '^description:' "$f" || { echo "$f: missing description"; exit 1; }
+            grep -q "using: 'composite'" "$f" || { echo "$f: not a composite action"; exit 1; }
+          done
+          # Public facades expose prompt/input and delegate to the shared engine
+          grep -q '  prompt:' action.yml || { echo "root: missing prompt input"; exit 1; }
+          grep -q '  prompt:' run/action.yml || { echo "run: missing prompt input"; exit 1; }
+          grep -q '  input:' workflow/action.yml || { echo "workflow: missing input"; exit 1; }
+          grep -q 'octomind-action/_core@' action.yml || { echo "root: not wired to _core"; exit 1; }
+          grep -q 'octomind-action/_core@' run/action.yml || { echo "run: not wired to _core"; exit 1; }
+          grep -q 'octomind-action/_core@' workflow/action.yml || { echo "workflow: not wired to _core"; exit 1; }
+          grep -q '  command:' _core/action.yml || { echo "_core: missing command input"; exit 1; }
+          echo "Action metadata OK"
 
   test-run:
-    name: Test (${{ matrix.os }})
+    name: Test run (${{ matrix.os }})
     needs: validate
     strategy:
       fail-fast: false
@@ -43,15 +51,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run action
+      # Test the shared engine directly — the public facades reference
+      # muvon/octomind-action/_core@v1, which only resolves after a release,
+      # so CI exercises ./_core on the checked-out code instead.
+      - name: Run octomind (run)
         id: octomind
-        uses: ./
+        uses: ./_core
         with:
+          command: run
           prompt: "say hi"
           role: assistant:general
-          model: ollama:minimax-m2.7
+          model: octohub:deepseek-v4-flash
         env:
-          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          OCTOHUB_API_KEY: ${{ secrets.OCTOHUB_API_KEY }}
 
       - name: Verify outputs
         shell: bash
@@ -61,3 +73,42 @@ jobs:
           echo "Session: ${{ steps.octomind.outputs.session_id }}"
           echo "Cost: ${{ steps.octomind.outputs.cost }}"
           test "${{ steps.octomind.outputs.exit_code }}" = "0"
+
+  test-workflow:
+    name: Test workflow
+    needs: validate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write smoke workflow
+        shell: bash
+        run: |
+          cat > /tmp/ci-workflow.toml <<'TOML'
+          name = "ci-smoke"
+
+          [[steps]]
+          name   = "greet"
+          role   = "assistant:general"
+          model  = "octohub:deepseek-v4-flash"
+          prompt = "Reply with a short greeting to: {{input}}"
+          TOML
+
+      - name: Run octomind (workflow)
+        id: wf
+        uses: ./_core
+        with:
+          command: workflow
+          workflow_file: /tmp/ci-workflow.toml
+          prompt: "the CI pipeline"
+        env:
+          OCTOHUB_API_KEY: ${{ secrets.OCTOHUB_API_KEY }}
+
+      - name: Verify outputs
+        shell: bash
+        run: |
+          echo "Exit code: ${{ steps.wf.outputs.exit_code }}"
+          echo "Result: ${{ steps.wf.outputs.result }}"
+          echo "Cost: ${{ steps.wf.outputs.cost }}"
+          test "${{ steps.wf.outputs.exit_code }}" = "0"
+          test -n "${{ steps.wf.outputs.result }}"
