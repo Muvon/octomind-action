@@ -73,7 +73,7 @@ runs:
   using: 'composite'
   steps:
     - id: core
-      uses: muvon/octomind-action/_core@v1
+      uses: muvon/octomind-action/_core@v2
       with:
         command: run
         prompt: ${{ inputs.prompt }}
