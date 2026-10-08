@@ -60,6 +60,7 @@ This repo ships two actions:
 | `version` | no | `latest` | Octomind version to install |
 | `tap` | no | — | Tap to add before run (e.g. `user/repo` or `user/repo ./local/path`) |
 | `config` | no | — | Path to octomind config file |
+| `max_cost` | no | — | Positive session spending stop threshold in USD (e.g. `2.00`); unset preserves config behavior |
 | `comment` | no | `none` | PR comment mode: `full`, `compact` (collapsible), or `none` |
 | `github_token` | no | `${{ github.token }}` | GitHub token for PR commenting |
 
@@ -99,6 +100,37 @@ This repo ships two actions:
 
 > Workflows have no single resumable session, so there is no `session_id` output.
 > `raw_output` streams each step's outcome as `{"type":"assistant","content":...,"step":"<name>"}`, so `result` (the last one) is the final result.
+## Cost control (run)
+
+```yaml
+- uses: muvon/octomind-action@v1
+  with:
+    prompt: "Summarize changes in this PR"
+    max_cost: '2.00'
+```
+
+`max_cost` is supported by the root and `/run` actions. It must be a positive,
+finite decimal USD amount; zero, negative values, and malformed input fail before
+agent execution. When omitted, the action leaves spending configuration unchanged.
+
+The action copies the selected configuration and its sibling TOML overrides into
+an isolated runner-temp directory, then applies `max_session_spending_threshold`.
+The `config` input takes precedence over `OCTOMIND_CONFIG_PATH`; otherwise the
+normal Octomind data-directory configuration is used, or defaults are initialized
+in the temporary directory. Original config files are not modified. The temporary
+copy is validated before execution and removed afterward. Python 3 must be available
+(on GitHub-hosted runners it is preinstalled).
+
+Octomind checks its tracked spending and declines continuation non-interactively
+when the session threshold is reached. This is **not a hard billing ceiling**:
+in-flight requests can overshoot, and enforcement depends on provider-reported
+costs. Resumed sessions follow Octomind's native spending-checkpoint semantics,
+not a separate action-level per-invocation ledger. The `cost` output still reports
+actual spending; budget stops use Octomind's native exit behavior.
+
+The `/workflow` action does not expose `max_cost`: a session threshold is not an
+aggregate budget across multiple workflow steps or parallel agents.
+
 
 ## API Keys
 
