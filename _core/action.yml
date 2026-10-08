@@ -37,6 +37,9 @@ inputs:
   role:
     description: 'Role to use (e.g. developer:rust). Defaults to config default'
     required: false
+  max_cost:
+    description: 'run only: positive session spending threshold in USD'
+    required: false
   model:
     description: 'Model override (e.g. openrouter:anthropic/claude-sonnet-4)'
     required: false
@@ -120,16 +123,41 @@ runs:
       if: inputs.tap != ''
       shell: bash
       run: octomind tap ${{ inputs.tap }}
+    - name: Prepare spending limit
+      id: budget
+      if: inputs.max_cost != ''
+      shell: bash
+      env:
+        INPUT_MAX_COST: ${{ inputs.max_cost }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_COMMAND: ${{ inputs.command }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        # Keep budget overrides isolated from the caller's config files.
+        set -euo pipefail
+        if [ "$INPUT_COMMAND" != "run" ]; then
+          echo "::error::max_cost is supported only for octomind run"
+          exit 1
+        fi
+        CONFIG_PATH=$(python3 "$ACTION_PATH/prepare-budget.py")
+        echo "config=$CONFIG_PATH" >> "$GITHUB_OUTPUT"
+
 
     - name: Run octomind
       id: run
       shell: bash
       env:
         INPUT_PROMPT: ${{ inputs.prompt }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        BUDGET_CONFIG: ${{ steps.budget.outputs.config }}
       run: |
         OUTPUT_FILE="${RUNNER_TEMP}/octomind-output.jsonl"
 
-        [ -n "${{ inputs.config }}" ] && export OCTOMIND_CONFIG_PATH="${{ inputs.config }}"
+        if [ -n "$BUDGET_CONFIG" ]; then
+          export OCTOMIND_CONFIG_PATH="$BUDGET_CONFIG"
+        elif [ -n "$INPUT_CONFIG" ]; then
+          export OCTOMIND_CONFIG_PATH="$INPUT_CONFIG"
+        fi
 
         set +e
         if [ "${{ inputs.command }}" = "workflow" ]; then
@@ -249,3 +277,13 @@ runs:
       run: |
         echo "::error::octomind exited with code ${{ steps.run.outputs.failed }}"
         exit ${{ steps.run.outputs.failed }}
+    - name: Remove temporary budget config
+      if: always() && steps.budget.outputs.config != ''
+      shell: bash
+      env:
+        BUDGET_CONFIG: ${{ steps.budget.outputs.config }}
+      run: |
+        # Remove only the isolated directory created for this invocation.
+        set -euo pipefail
+        python3 -c 'import os, pathlib, shutil; shutil.rmtree(pathlib.Path(os.environ["BUDGET_CONFIG"]).parent)'
+
