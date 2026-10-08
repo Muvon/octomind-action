@@ -3,9 +3,9 @@ description: 'Run Octomind AI agent in your GitHub Actions workflows'
 author: 'Muvon Un Limited'
 
 # This root action is the Marketplace listing and the bare-reference entry
-# point (muvon/octomind-action@v1). It is an alias for the `run` command —
-# identical to muvon/octomind-action/run@v1. For multi-step TOML workflows,
-# use muvon/octomind-action/workflow@v1.
+# point (muvon/octomind-action@v2). It is an alias for the `run` command —
+# identical to muvon/octomind-action/run@v2. For multi-step TOML workflows,
+# use muvon/octomind-action/workflow@v2.
 
 branding:
   icon: 'cpu'
@@ -78,7 +78,7 @@ runs:
   using: 'composite'
   steps:
     - id: core
-      uses: muvon/octomind-action/_core@v1
+      uses: muvon/octomind-action/_core@v2
       with:
         command: run
         prompt: ${{ inputs.prompt }}

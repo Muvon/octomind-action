@@ -6,10 +6,10 @@ This repo ships two actions:
 
 | Action | Reference | Runs |
 |--------|-----------|------|
-| **Run** | `muvon/octomind-action@v1` or `muvon/octomind-action/run@v1` | `octomind run` — a single agent/session from a prompt |
-| **Workflow** | `muvon/octomind-action/workflow@v1` | `octomind workflow` — a multi-step pipeline from a TOML file |
+| **Run** | `muvon/octomind-action@v2` or `muvon/octomind-action/run@v2` | `octomind run` — a single agent/session from a prompt |
+| **Workflow** | `muvon/octomind-action/workflow@v2` | `octomind workflow` — a multi-step pipeline from a TOML file |
 
-> `muvon/octomind-action@v1` is an alias for `muvon/octomind-action/run@v1` — both run the same `run` action.
+> `muvon/octomind-action@v2` is an alias for `muvon/octomind-action/run@v2` — both run the same `run` action.
 
 ## Features
 
@@ -26,7 +26,7 @@ This repo ships two actions:
 ### Run
 
 ```yaml
-- uses: muvon/octomind-action@v1
+- uses: muvon/octomind-action@v2
   with:
     prompt: "Review this code for issues"
   env:
@@ -36,7 +36,7 @@ This repo ships two actions:
 ### Workflow
 
 ```yaml
-- uses: muvon/octomind-action/workflow@v1
+- uses: muvon/octomind-action/workflow@v2
   with:
     workflow_file: .octomind/review.toml
     input: "Review the changes in this PR"
@@ -46,7 +46,7 @@ This repo ships two actions:
 
 ## Run inputs
 
-`muvon/octomind-action@v1` · `muvon/octomind-action/run@v1`
+`muvon/octomind-action@v2` · `muvon/octomind-action/run@v2`
 
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
@@ -76,7 +76,7 @@ This repo ships two actions:
 
 ## Workflow inputs
 
-`muvon/octomind-action/workflow@v1`
+`muvon/octomind-action/workflow@v2`
 
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
@@ -103,7 +103,7 @@ This repo ships two actions:
 ## Cost control (run)
 
 ```yaml
-- uses: muvon/octomind-action@v1
+- uses: muvon/octomind-action@v2
   with:
     prompt: "Summarize changes in this PR"
     max_cost: '2.00'
@@ -167,7 +167,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: muvon/octomind-action@v1
+      - uses: muvon/octomind-action@v2
         with:
           role: developer:rust
           prompt: "Review this PR for security issues and suggest fixes"
@@ -188,7 +188,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: muvon/octomind-action/workflow@v1
+      - uses: muvon/octomind-action/workflow@v2
         with:
           workflow_file: .octomind/develop.toml
           input: "Add retry with backoff to the HTTP client"
@@ -216,7 +216,7 @@ prompt = "Implement the spec using this context:\n<context>{{context}}</context>
 ### Validate a workflow (dry-run)
 
 ```yaml
-- uses: muvon/octomind-action/workflow@v1
+- uses: muvon/octomind-action/workflow@v2
   with:
     workflow_file: .octomind/develop.toml
     input: "noop"
@@ -226,7 +226,7 @@ prompt = "Implement the spec using this context:\n<context>{{context}}</context>
 ### Compact PR comment
 
 ```yaml
-- uses: muvon/octomind-action@v1
+- uses: muvon/octomind-action@v2
   with:
     prompt: "Summarize changes in this PR"
     comment: compact
@@ -237,7 +237,7 @@ prompt = "Implement the spec using this context:\n<context>{{context}}</context>
 ### Custom Tap
 
 ```yaml
-- uses: muvon/octomind-action/run@v1
+- uses: muvon/octomind-action/run@v2
   with:
     role: reviewer:security
     prompt: "Audit the changes in this PR"
@@ -250,7 +250,7 @@ prompt = "Implement the spec using this context:\n<context>{{context}}</context>
 ### Using Outputs
 
 ```yaml
-- uses: muvon/octomind-action@v1
+- uses: muvon/octomind-action@v2
   id: review
   with:
     prompt: "Analyze code quality"
@@ -267,7 +267,7 @@ prompt = "Implement the spec using this context:\n<context>{{context}}</context>
 
 ```yaml
 # First run — creates the session
-- uses: muvon/octomind-action@v1
+- uses: muvon/octomind-action@v2
   with:
     prompt: "Analyze the codebase structure"
     name: analysis
@@ -275,7 +275,7 @@ prompt = "Implement the spec using this context:\n<context>{{context}}</context>
     OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
 # Later step — resumes with context
-- uses: muvon/octomind-action@v1
+- uses: muvon/octomind-action@v2
   with:
     prompt: "Now suggest improvements based on your analysis"
     resume: analysis
@@ -293,7 +293,7 @@ The binary is installed to `$RUNNER_TOOL_CACHE/octomind/<version>/` and reused w
     path: ${{ runner.tool_cache }}/octomind
     key: octomind-v0.23.1
 
-- uses: muvon/octomind-action@v1
+- uses: muvon/octomind-action@v2
   with:
     version: "0.23.1"
     prompt: "Run analysis"
@@ -305,9 +305,9 @@ The binary is installed to `$RUNNER_TOOL_CACHE/octomind/<version>/` and reused w
 
 | Path | Purpose |
 |------|---------|
-| `action.yml` | Root action — Marketplace listing and `@v1` entry point (= `run`) |
-| `run/action.yml` | The `run` action (`/run@v1`) |
-| `workflow/action.yml` | The `workflow` action (`/workflow@v1`) |
+| `action.yml` | Root action — Marketplace listing and `@v2` entry point (= `run`) |
+| `run/action.yml` | The `run` action (`/run@v2`) |
+| `workflow/action.yml` | The `workflow` action (`/workflow@v2`) |
 | `_core/action.yml` | Internal shared engine (install + invoke + parse + comment). Not for direct use |
 
 The public actions are thin facades that delegate to `_core`, so install, output parsing, and PR commenting live in one place.

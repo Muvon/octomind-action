@@ -59,7 +59,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # Test the shared engine directly — the public facades reference
-      # muvon/octomind-action/_core@v1, which only resolves after a release,
+      # muvon/octomind-action/_core@v2, which only resolves after a release,
       # so CI exercises ./_core on the checked-out code instead.
       - name: Run octomind (run)
         id: octomind
